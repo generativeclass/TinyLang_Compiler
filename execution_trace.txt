@@ -1,0 +1,14 @@
+Program execution started
+Evaluated Literal to 10
+Declared variable 'x' with value 10
+Executed VarDeclaration
+Evaluated Literal to 20
+Declared variable 'y' with value 20
+Executed VarDeclaration
+Evaluated Identifier to 10
+Evaluated Identifier to 20
+Binary operation: 10 MULTIPLY 20
+Evaluated BinaryOperation to 200
+Printed: 200
+Executed PrintStatement
+Program execution completed

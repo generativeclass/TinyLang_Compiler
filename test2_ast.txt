@@ -1,0 +1,14 @@
+ABSTRACT SYNTAX TREE:
+Program:
+  VarDeclaration: x
+    Initializer:
+      Literal: 10 (number)
+  VarDeclaration: y
+    Initializer:
+      Literal: 20 (number)
+  PrintStatement:
+    BinaryOperation: MULTIPLY
+      Left:
+        Identifier: x
+      Right:
+        Identifier: y
