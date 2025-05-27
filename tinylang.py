@@ -1,40 +1,20 @@
 #!/usr/bin/env python3
 """
-TinyLang Compiler
+Enhanced TinyLang Compiler with Complete 6 Phases
 
-This is a minimalist compiler for the TinyLang language, which supports:
-- Variable declarations and assignments
-- Basic arithmetic operations
-- Conditionals
-- Print statements
-- Simple loops
-
-The compiler follows these stages:
+Phases:
 1. Lexical Analysis (Tokenization)
 2. Syntax Analysis (Parsing)
-3. Code Generation
-
-Example TinyLang program:
-```
-var x = 5;
-var y = 10;
-print x + y;
-if (x < y) {
-    print "x is less than y";
-}
-var i = 0;
-while (i < 5) {
-    print i;
-    i = i + 1;
-}
-```
+3. Semantic Analysis
+4. Intermediate Code Generation
+5. Optimization
+6. Code Generation
 """
 
 import re
 import sys
 
-# PART 1: LEXICAL ANALYSIS (TOKENIZER)
-# Token types
+# Phase 1: Lexical Analysis (Tokenization)
 TOKEN_TYPES = {
     'VAR': r'var',
     'IF': r'if',
@@ -73,7 +53,6 @@ class Token:
     def __repr__(self):
         return f'Token({self.type}, {repr(self.value)}, line={self.line}, col={self.column})'
 
-
 class Lexer:
     def __init__(self, source_code):
         self.source_code = source_code
@@ -90,7 +69,7 @@ class Lexer:
                 match = regex.match(self.source_code[self.position:])
                 if match:
                     value = match.group(0)
-                    if token_type != 'WHITESPACE':  # Skip whitespace
+                    if token_type != 'WHITESPACE':
                         self.tokens.append(Token(token_type, value, self.line, self.column))
                     
                     # Update line and column counters
@@ -109,8 +88,7 @@ class Lexer:
         
         return self.tokens
 
-
-# PART 2: SYNTAX ANALYSIS (PARSER)
+# Phase 2: Syntax Analysis (Parsing)
 class ASTNode:
     pass
 
@@ -146,7 +124,7 @@ class Identifier(ASTNode):
 class Literal(ASTNode):
     def __init__(self, value, value_type):
         self.value = value
-        self.value_type = value_type  # 'number', 'string', etc.
+        self.value_type = value_type
 
 class PrintStatement(ASTNode):
     def __init__(self, expression):
@@ -166,7 +144,6 @@ class WhileStatement(ASTNode):
 class Block(ASTNode):
     def __init__(self, statements):
         self.statements = statements
-
 
 class Parser:
     def __init__(self, tokens):
@@ -311,7 +288,6 @@ class Parser:
             return Literal(int(self.previous().value), 'number')
         
         if self.match('STRING'):
-            # Remove the quotes
             value = self.previous().value[1:-1]
             return Literal(value, 'string')
         
@@ -358,401 +334,362 @@ class Parser:
         token = self.peek()
         raise SyntaxError(f"{error_message} at line {token.line}, column {token.column}")
 
-
-# PART 3: CODE GENERATION
-class Interpreter:
-    def __init__(self, program):
-        self.program = program
-        self.environment = {}  # Variables storage
-        self.execution_trace = []  # To store execution steps
-
-    def interpret(self):
-        self.execution_trace.append("Program execution started")
-        for statement in self.program.statements:
-            self.execute(statement)
-        self.execution_trace.append("Program execution completed")
-        
-        # Write execution trace to file
-        with open("execution_trace.txt", "w") as trace_file:
-            for step in self.execution_trace:
-                trace_file.write(step + "\n")
-        print("Execution trace saved to execution_trace.txt")
-
-    def execute(self, statement):
-        # Use visitor pattern based on statement type
-        method_name = f"execute_{statement.__class__.__name__}"
-        method = getattr(self, method_name, self.execute_unknown)
-        result = method(statement)
-        self.execution_trace.append(f"Executed {statement.__class__.__name__}")
-        return result
-
-    def execute_unknown(self, statement):
-        self.execution_trace.append(f"Unknown statement: {statement.__class__.__name__}")
-        raise RuntimeError(f"Unknown statement type: {statement.__class__.__name__}")
-
-    def execute_VarDeclaration(self, statement):
-        value = None
-        if statement.initializer:
-            value = self.evaluate(statement.initializer)
-        self.environment[statement.name] = value
-        self.execution_trace.append(f"Declared variable '{statement.name}' with value {value}")
-
-    def execute_PrintStatement(self, statement):
-        value = self.evaluate(statement.expression)
-        print(value)
-        self.execution_trace.append(f"Printed: {value}")
-
-    def execute_IfStatement(self, statement):
-        condition_result = self.evaluate(statement.condition)
-        self.execution_trace.append(f"If condition evaluated to: {condition_result}")
-        
-        if self.is_truthy(condition_result):
-            self.execution_trace.append("Taking 'then' branch")
-            self.execute(statement.then_branch)
-        elif statement.else_branch:
-            self.execution_trace.append("Taking 'else' branch")
-            self.execute(statement.else_branch)
-        else:
-            self.execution_trace.append("Condition false, no 'else' branch")
-
-    def execute_WhileStatement(self, statement):
-        iterations = 0
-        while True:
-            condition_result = self.evaluate(statement.condition)
-            self.execution_trace.append(f"While condition evaluated to: {condition_result} (iteration {iterations})")
-            
-            if not self.is_truthy(condition_result):
-                break
-                
-            self.execute(statement.body)
-            iterations += 1
-
-    def execute_Block(self, statement):
-        self.execution_trace.append("Entering code block")
-        for stmt in statement.statements:
-            self.execute(stmt)
-        self.execution_trace.append("Exiting code block")
-
-    def execute_Assignment(self, statement):
-        value = self.evaluate(statement.value)
-        if statement.name not in self.environment:
-            self.execution_trace.append(f"Error: Undefined variable '{statement.name}'")
-            raise RuntimeError(f"Undefined variable '{statement.name}'")
-        
-        self.environment[statement.name] = value
-        self.execution_trace.append(f"Assigned {value} to '{statement.name}'")
-        return value
-
-    def execute_BinaryOperation(self, expression):
-        return self.evaluate(expression)
-
-    def evaluate(self, expression):
-        # Use visitor pattern based on expression type
-        method_name = f"evaluate_{expression.__class__.__name__}"
-        method = getattr(self, method_name, self.evaluate_unknown)
-        result = method(expression)
-        self.execution_trace.append(f"Evaluated {expression.__class__.__name__} to {result}")
-        return result
-
-    def evaluate_unknown(self, expression):
-        self.execution_trace.append(f"Unknown expression: {expression.__class__.__name__}")
-        raise RuntimeError(f"Unknown expression type: {expression.__class__.__name__}")
-
-    def evaluate_Literal(self, expression):
-        return expression.value
-
-    def evaluate_Identifier(self, expression):
-        if expression.name not in self.environment:
-            self.execution_trace.append(f"Error: Undefined variable '{expression.name}'")
-            raise RuntimeError(f"Undefined variable '{expression.name}'")
-        return self.environment[expression.name]
-
-    def evaluate_BinaryOperation(self, expression):
-        left = self.evaluate(expression.left)
-        right = self.evaluate(expression.right)
-        
-        self.execution_trace.append(f"Binary operation: {left} {expression.operator} {right}")
-        
-        if expression.operator == 'PLUS':
-            return left + right
-        elif expression.operator == 'MINUS':
-            return left - right
-        elif expression.operator == 'MULTIPLY':
-            return left * right
-        elif expression.operator == 'DIVIDE':
-            return left // right if isinstance(left, int) and isinstance(right, int) else left / right
-        elif expression.operator == 'EQUAL':
-            return left == right
-        elif expression.operator == 'NOT_EQUAL':
-            return left != right
-        elif expression.operator == 'LESS_THAN':
-            return left < right
-        elif expression.operator == 'GREATER_THAN':
-            return left > right
-        elif expression.operator == 'LESS_EQUAL':
-            return left <= right
-        elif expression.operator == 'GREATER_EQUAL':
-            return left >= right
-        else:
-            self.execution_trace.append(f"Error: Unknown binary operator: {expression.operator}")
-            raise RuntimeError(f"Unknown binary operator: {expression.operator}")
-
-    def evaluate_UnaryOperation(self, expression):
-        right = self.evaluate(expression.operand)
-        
-        if expression.operator == 'MINUS':
-            return -right
-        else:
-            self.execution_trace.append(f"Error: Unknown unary operator: {expression.operator}")
-            raise RuntimeError(f"Unknown unary operator: {expression.operator}")
-
-    def evaluate_Assignment(self, expression):
-        value = self.evaluate(expression.value)
-        self.environment[expression.name] = value
-        self.execution_trace.append(f"Assignment expression: {expression.name} = {value}")
-        return value
-
-    def is_truthy(self, value):
-        if value is None:
-            return False
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, (int, float)):
-            return value != 0
-        if isinstance(value, str):
-            return len(value) > 0
-        return True
-
-
-def compile_and_run(source_code, filename='program'):
-    """
-    Main entry point to compile and run TinyLang code
-    Outputs separate files for each compilation stage
-    """
-    try:
-        base_filename = filename.split('/')[-1].split('.')[0]  # Extract base name without extension
-        
-        # 1. Tokenize
-        lexer = Lexer(source_code)
-        tokens = lexer.tokenize()
-        
-        # Save tokens to file
-        with open(f"{base_filename}_tokens.txt", "w") as token_file:
-            token_file.write("TOKEN LIST:\n")
-            for i, token in enumerate(tokens):
-                token_file.write(f"{i}: {token}\n")
-        print(f"Tokens saved to {base_filename}_tokens.txt")
-        
-        # Save the original source code
-        with open(f"{base_filename}_source.tl", "w") as source_file:
-            source_file.write(source_code)
-        print(f"Source code saved to {base_filename}_source.tl")
-        
-        # 2. Parse
-        parser = Parser(tokens)
-        ast = parser.parse()
-        
-        # Save AST to file using a custom AST printer
-        with open(f"{base_filename}_ast.txt", "w") as ast_file:
-            ast_file.write("ABSTRACT SYNTAX TREE:\n")
-            ast_printer = ASTPrinter(ast_file)
-            ast_printer.print_ast(ast)
-        print(f"AST saved to {base_filename}_ast.txt")
-        
-        # 3. Interpret (code generation step would be here in a real compiler)
-        with open(f"{base_filename}_output.txt", "w") as output_file:
-            # Redirect print output to file
-            original_stdout = sys.stdout
-            sys.stdout = output_file
-            
-            interpreter = Interpreter(ast)
-            interpreter.interpret()
-            
-            # Restore original stdout
-            sys.stdout = original_stdout
-        print(f"Program output saved to {base_filename}_output.txt")
-        
-        # The execution trace is saved by the interpreter itself
-        
-        # Generate simple bytecode (for demonstration)
-        bytecode = ByteCodeGenerator().generate(ast)
-        with open(f"{base_filename}_bytecode.txt", "w") as bytecode_file:
-            for i, instruction in enumerate(bytecode):
-                bytecode_file.write(f"{i:04d}: {instruction}\n")
-        print(f"Bytecode saved to {base_filename}_bytecode.txt")
-        
-        return True
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-
-# Simple ByteCode Generator
-class ByteCodeGenerator:
+# Phase 3: Semantic Analysis
+class SemanticAnalyzer:
     def __init__(self):
-        self.bytecode = []
-        self.constants = []
-        self.variables = {}
-        self.label_counter = 0
-    
-    def generate(self, node):
-        """Generate bytecode for the AST"""
-        self.bytecode = []
-        self._visit(node)
-        self.bytecode.append(("HALT",))
-        return self.bytecode
-    
-    def _visit(self, node):
-        """Visit a node in the AST and generate bytecode"""
-        method_name = f"_visit_{node.__class__.__name__}"
-        method = getattr(self, method_name, self._visit_unknown)
-        return method(node)
-    
-    def _visit_unknown(self, node):
-        self.bytecode.append((f"UNKNOWN_NODE: {node.__class__.__name__}",))
-    
-    def _visit_Program(self, node):
+        self.symbol_table = set()
+        self.errors = []
+
+    def analyze(self, node):
+        method_name = f'analyze_{node.__class__.__name__}'
+        method = getattr(self, method_name, self.analyze_unknown)
+        method(node)
+        return self.errors
+
+    def analyze_unknown(self, node):
+        self.errors.append(f"Unknown node type: {node.__class__.__name__}")
+
+    def analyze_Program(self, node):
         for statement in node.statements:
-            self._visit(statement)
-    
-    def _visit_VarDeclaration(self, node):
-        # Add variable to the variables dictionary
-        if node.name not in self.variables:
-            self.variables[node.name] = len(self.variables)
-        
-        # Generate code for initializer if it exists
+            self.analyze(statement)
+
+    def analyze_VarDeclaration(self, node):
+        if node.name in self.symbol_table:
+            self.errors.append(f"Redeclaration of variable '{node.name}'")
+        self.symbol_table.add(node.name)
         if node.initializer:
-            self._visit(node.initializer)
-            self.bytecode.append(("STORE_VAR", node.name))
-        else:
-            # Push a default value (0) and store it
-            self.bytecode.append(("PUSH_CONST", 0))
-            self.bytecode.append(("STORE_VAR", node.name))
-    
-    def _visit_PrintStatement(self, node):
-        self._visit(node.expression)
-        self.bytecode.append(("PRINT",))
-    
-    def _visit_IfStatement(self, node):
-        else_label = self._next_label()
-        end_label = self._next_label()
-        
-        # Generate code for the condition
-        self._visit(node.condition)
-        self.bytecode.append(("JUMP_IF_FALSE", else_label))
-        
-        # Generate code for the then branch
-        self._visit(node.then_branch)
-        self.bytecode.append(("JUMP", end_label))
-        
-        # Add else label
-        self.bytecode.append(("LABEL", else_label))
-        
-        # Generate code for the else branch if it exists
+            self.analyze(node.initializer)
+
+    def analyze_Assignment(self, node):
+        if node.name not in self.symbol_table:
+            self.errors.append(f"Assignment to undeclared variable '{node.name}'")
+        self.analyze(node.value)
+
+    def analyze_Identifier(self, node):
+        if node.name not in self.symbol_table:
+            self.errors.append(f"Use of undeclared variable '{node.name}'")
+
+    def analyze_BinaryOperation(self, node):
+        self.analyze(node.left)
+        self.analyze(node.right)
+
+    def analyze_UnaryOperation(self, node):
+        self.analyze(node.operand)
+
+    def analyze_PrintStatement(self, node):
+        self.analyze(node.expression)
+
+    def analyze_IfStatement(self, node):
+        self.analyze(node.condition)
+        self.analyze(node.then_branch)
         if node.else_branch:
-            self._visit(node.else_branch)
-        
-        # Add end label
-        self.bytecode.append(("LABEL", end_label))
-    
-    def _visit_WhileStatement(self, node):
-        start_label = self._next_label()
-        end_label = self._next_label()
-        
-        # Add start label
-        self.bytecode.append(("LABEL", start_label))
-        
-        # Generate code for the condition
-        self._visit(node.condition)
-        self.bytecode.append(("JUMP_IF_FALSE", end_label))
-        
-        # Generate code for the body
-        self._visit(node.body)
-        
-        # Jump back to the start
-        self.bytecode.append(("JUMP", start_label))
-        
-        # Add end label
-        self.bytecode.append(("LABEL", end_label))
-    
-    def _visit_Block(self, node):
+            self.analyze(node.else_branch)
+
+    def analyze_WhileStatement(self, node):
+        self.analyze(node.condition)
+        self.analyze(node.body)
+
+    def analyze_Block(self, node):
         for statement in node.statements:
-            self._visit(statement)
-    
-    def _visit_Assignment(self, node):
-        self._visit(node.value)
-        self.bytecode.append(("STORE_VAR", node.name))
-    
-    def _visit_BinaryOperation(self, node):
-        # Visit the left and right operands
-        self._visit(node.left)
-        self._visit(node.right)
+            self.analyze(statement)
+
+    def analyze_Literal(self, node):
+        pass  # Literals don't need semantic analysis
+
+# Phase 4: Intermediate Code Generation
+class IntermediateCodeGenerator:
+    def __init__(self):
+        self.code = []
+        self.temp_counter = 0
+
+    def generate(self, node):
+        method_name = f'generate_{node.__class__.__name__}'
+        method = getattr(self, method_name, self.generate_unknown)
+        method(node)
+        return self.code
+
+    def generate_unknown(self, node):
+        self.code.append(f"# Unknown node: {node.__class__.__name__}")
+
+    def new_temp(self):
+        temp = f"t{self.temp_counter}"
+        self.temp_counter += 1
+        return temp
+
+    def generate_Program(self, node):
+        for statement in node.statements:
+            self.generate(statement)
+
+    def generate_VarDeclaration(self, node):
+        if node.initializer:
+            temp = self.generate_expression(node.initializer)
+            self.code.append(f"STORE {node.name}, {temp}")
+
+    def generate_Assignment(self, node):
+        temp = self.generate_expression(node.value)
+        self.code.append(f"STORE {node.name}, {temp}")
+
+    def generate_PrintStatement(self, node):
+        temp = self.generate_expression(node.expression)
+        self.code.append(f"PRINT {temp}")
+
+    def generate_IfStatement(self, node):
+        condition_temp = self.generate_expression(node.condition)
+        else_label = f"L{self.temp_counter}"
+        end_label = f"L{self.temp_counter + 1}"
+        self.temp_counter += 2
         
-        # Generate the appropriate operation
-        if node.operator == 'PLUS':
-            self.bytecode.append(("ADD",))
-        elif node.operator == 'MINUS':
-            self.bytecode.append(("SUBTRACT",))
-        elif node.operator == 'MULTIPLY':
-            self.bytecode.append(("MULTIPLY",))
-        elif node.operator == 'DIVIDE':
-            self.bytecode.append(("DIVIDE",))
-        elif node.operator == 'EQUAL':
-            self.bytecode.append(("EQUAL",))
-        elif node.operator == 'NOT_EQUAL':
-            self.bytecode.append(("NOT_EQUAL",))
-        elif node.operator == 'LESS_THAN':
-            self.bytecode.append(("LESS_THAN",))
-        elif node.operator == 'GREATER_THAN':
-            self.bytecode.append(("GREATER_THAN",))
-        elif node.operator == 'LESS_EQUAL':
-            self.bytecode.append(("LESS_EQUAL",))
-        elif node.operator == 'GREATER_EQUAL':
-            self.bytecode.append(("GREATER_EQUAL",))
-        else:
-            self.bytecode.append((f"UNKNOWN_OPERATOR: {node.operator}",))
-    
-    def _visit_UnaryOperation(self, node):
-        self._visit(node.operand)
-        if node.operator == 'MINUS':
-            self.bytecode.append(("NEGATE",))
-        else:
-            self.bytecode.append((f"UNKNOWN_UNARY_OPERATOR: {node.operator}",))
-    
-    def _visit_Identifier(self, node):
-        self.bytecode.append(("LOAD_VAR", node.name))
-    
-    def _visit_Literal(self, node):
-        self.bytecode.append(("PUSH_CONST", node.value))
-    
-    def _next_label(self):
-        """Generate a unique label for jumps"""
-        label = f"L{self.label_counter}"
-        self.label_counter += 1
-        return label
+        self.code.append(f"IF_FALSE {condition_temp} GOTO {else_label}")
+        self.generate(node.then_branch)
+        self.code.append(f"GOTO {end_label}")
+        self.code.append(f"LABEL {else_label}")
+        if node.else_branch:
+            self.generate(node.else_branch)
+        self.code.append(f"LABEL {end_label}")
 
+    def generate_WhileStatement(self, node):
+        start_label = f"L{self.temp_counter}"
+        end_label = f"L{self.temp_counter + 1}"
+        self.temp_counter += 2
+        
+        self.code.append(f"LABEL {start_label}")
+        condition_temp = self.generate_expression(node.condition)
+        self.code.append(f"IF_FALSE {condition_temp} GOTO {end_label}")
+        self.generate(node.body)
+        self.code.append(f"GOTO {start_label}")
+        self.code.append(f"LABEL {end_label}")
 
-# AST Printer for visualization
+    def generate_Block(self, node):
+        for statement in node.statements:
+            self.generate(statement)
+
+    def generate_expression(self, node):
+        if isinstance(node, Identifier):
+            temp = self.new_temp()
+            self.code.append(f"LOAD {temp}, {node.name}")
+            return temp
+        elif isinstance(node, Literal):
+            temp = self.new_temp()
+            self.code.append(f"LOAD {temp}, #{node.value}")
+            return temp
+        elif isinstance(node, BinaryOperation):
+            left_temp = self.generate_expression(node.left)
+            right_temp = self.generate_expression(node.right)
+            result_temp = self.new_temp()
+            op = {
+                'PLUS': 'ADD',
+                'MINUS': 'SUB',
+                'MULTIPLY': 'MUL',
+                'DIVIDE': 'DIV',
+                'EQUAL': 'EQ',
+                'NOT_EQUAL': 'NEQ',
+                'LESS_THAN': 'LT',
+                'GREATER_THAN': 'GT',
+                'LESS_EQUAL': 'LE',
+                'GREATER_EQUAL': 'GE'
+            }.get(node.operator, node.operator)
+            self.code.append(f"{op} {result_temp}, {left_temp}, {right_temp}")
+            return result_temp
+        elif isinstance(node, UnaryOperation):
+            operand_temp = self.generate_expression(node.operand)
+            result_temp = self.new_temp()
+            if node.operator == 'MINUS':
+                self.code.append(f"NEG {result_temp}, {operand_temp}")
+            return result_temp
+        else:
+            temp = self.new_temp()
+            self.code.append(f"# Unknown expression: {node.__class__.__name__} -> {temp}")
+            return temp
+
+# Phase 5: Optimization
+class Optimizer:
+    def __init__(self):
+        self.optimized_code = []
+
+    def optimize(self, intermediate_code):
+        # Simple constant folding and dead code elimination
+        constants = {}
+        i = 0
+        while i < len(intermediate_code):
+            line = intermediate_code[i]
+            
+            # Constant folding for assignments
+            if line.startswith("LOAD t") and ", #" in line:
+                parts = line.split()
+                temp = parts[1][:-1]  # Remove comma
+                value = parts[2][1:]  # Remove #
+                constants[temp] = value
+            
+            # Constant propagation
+            elif any(temp in line for temp in constants):
+                for temp, value in constants.items():
+                    line = line.replace(temp, f"#{value}")
+                self.optimized_code.append(line)
+                i += 1
+                continue
+            
+            # Dead code elimination for unused temps
+            elif line.startswith("LOAD t") and i+1 < len(intermediate_code):
+                temp = line.split()[1][:-1]
+                used = any(temp in l for l in intermediate_code[i+1:])
+                if not used:
+                    i += 1
+                    continue
+            
+            self.optimized_code.append(line)
+            i += 1
+        
+        return self.optimized_code
+
+# Phase 6: Code Generation
+class TargetCodeGenerator:
+    def __init__(self):
+        self.code = []
+        self.register_pool = ['r0', 'r1', 'r2', 'r3']
+        self.register_map = {}
+
+    def generate(self, optimized_code):
+        for line in optimized_code:
+            if line.startswith("#"):
+                self.code.append(line)
+                continue
+            
+            if line.startswith("LOAD"):
+                parts = line.split()
+                dest = parts[1][:-1]  # Remove comma
+                src = parts[2]
+                
+                if src.startswith("#"):  # Constant
+                    reg = self.get_register(dest)
+                    self.code.append(f"MOV {reg}, {src}")
+                else:  # Variable
+                    reg = self.get_register(dest)
+                    self.code.append(f"LD {reg}, {src}")
+            
+            elif line.startswith("STORE"):
+                parts = line.split()
+                dest = parts[1][:-1]  # Remove comma
+                src = parts[2]
+                
+                if src.startswith("t"):  # Temporary
+                    reg = self.register_map.get(src)
+                    if reg:
+                        self.code.append(f"ST {dest}, {reg}")
+                    else:
+                        self.code.append(f"# Error: Unknown temp {src}")
+                else:  # Constant
+                    reg = self.get_register('temp')
+                    self.code.append(f"MOV {reg}, {src}")
+                    self.code.append(f"ST {dest}, {reg}")
+            
+            elif line.startswith(("ADD", "SUB", "MUL", "DIV", "EQ", "NEQ", "LT", "GT", "LE", "GE")):
+                op = line.split()[0]
+                dest = line.split()[1][:-1]  # Remove comma
+                src1 = line.split()[2][:-1]  # Remove comma
+                src2 = line.split()[3]
+                
+                reg_dest = self.get_register(dest)
+                reg_src1 = self.get_register(src1) if src1.startswith("t") else src1
+                reg_src2 = self.get_register(src2) if src2.startswith("t") else src2
+                
+                self.code.append(f"{op} {reg_dest}, {reg_src1}, {reg_src2}")
+            
+            elif line.startswith("PRINT"):
+                src = line.split()[1]
+                if src.startswith("t"):
+                    reg = self.register_map.get(src)
+                    if reg:
+                        self.code.append(f"OUT {reg}")
+                    else:
+                        self.code.append(f"# Error: Unknown temp {src}")
+                else:
+                    self.code.append(f"OUT #{src}")
+            
+            elif line.startswith("IF_FALSE"):
+                parts = line.split()
+                cond = parts[1]
+                label = parts[3]
+                
+                reg = self.register_map.get(cond)
+                if reg:
+                    self.code.append(f"BNZ {reg}, {label}")
+                else:
+                    self.code.append(f"# Error: Unknown temp {cond}")
+            
+            elif line.startswith("GOTO"):
+                label = line.split()[1]
+                self.code.append(f"JMP {label}")
+            
+            elif line.startswith("LABEL"):
+                label = line.split()[1]
+                self.code.append(f"{label}:")
+            
+            elif line.startswith("NEG"):
+                parts = line.split()
+                dest = parts[1][:-1]  # Remove comma
+                src = parts[2]
+                
+                reg_dest = self.get_register(dest)
+                reg_src = self.get_register(src) if src.startswith("t") else src
+                
+                self.code.append(f"NEG {reg_dest}, {reg_src}")
+            
+            else:
+                self.code.append(f"# Unknown instruction: {line}")
+        
+        return self.code
+
+    def get_register(self, temp):
+        if temp in self.register_map:
+            return self.register_map[temp]
+        
+        if self.register_pool:
+            reg = self.register_pool.pop(0)
+            self.register_map[temp] = reg
+            return reg
+        
+        # Register spilling - reuse r0
+        spilled = 'r0'
+        for t, r in list(self.register_map.items()):
+            if r == spilled:
+                self.code.append(f"ST {t}, {spilled}")
+                del self.register_map[t]
+                break
+        
+        self.register_map[temp] = spilled
+        return spilled
+
+# AST Printer
 class ASTPrinter:
-    def __init__(self, file):
-        self.file = file
+    def __init__(self):
+        self.output = []
         self.indent_level = 0
-        
+
     def print_ast(self, node):
-        method_name = f"print_{node.__class__.__name__}"
+        method_name = f'print_{node.__class__.__name__}'
         method = getattr(self, method_name, self.print_unknown)
         method(node)
-    
+        return '\n'.join(self.output)
+
     def print_unknown(self, node):
         self._write(f"Unknown node type: {node.__class__.__name__}")
-    
+
+    def _write(self, text):
+        self.output.append("  " * self.indent_level + text)
+
+    def _indent(self):
+        self.indent_level += 1
+
+    def _dedent(self):
+        self.indent_level -= 1
+
     def print_Program(self, node):
         self._write("Program:")
         self._indent()
         for statement in node.statements:
             self.print_ast(statement)
         self._dedent()
-    
+
     def print_VarDeclaration(self, node):
         self._write(f"VarDeclaration: {node.name}")
         if node.initializer:
@@ -762,13 +699,13 @@ class ASTPrinter:
             self.print_ast(node.initializer)
             self._dedent()
             self._dedent()
-    
+
     def print_Assignment(self, node):
         self._write(f"Assignment: {node.name} =")
         self._indent()
         self.print_ast(node.value)
         self._dedent()
-    
+
     def print_BinaryOperation(self, node):
         self._write(f"BinaryOperation: {node.operator}")
         self._indent()
@@ -781,25 +718,25 @@ class ASTPrinter:
         self.print_ast(node.right)
         self._dedent()
         self._dedent()
-    
+
     def print_UnaryOperation(self, node):
         self._write(f"UnaryOperation: {node.operator}")
         self._indent()
         self.print_ast(node.operand)
         self._dedent()
-    
+
     def print_Identifier(self, node):
         self._write(f"Identifier: {node.name}")
-    
+
     def print_Literal(self, node):
         self._write(f"Literal: {repr(node.value)} ({node.value_type})")
-    
+
     def print_PrintStatement(self, node):
         self._write("PrintStatement:")
         self._indent()
         self.print_ast(node.expression)
         self._dedent()
-    
+
     def print_IfStatement(self, node):
         self._write("IfStatement:")
         self._indent()
@@ -817,7 +754,7 @@ class ASTPrinter:
             self.print_ast(node.else_branch)
             self._dedent()
         self._dedent()
-    
+
     def print_WhileStatement(self, node):
         self._write("WhileStatement:")
         self._indent()
@@ -830,55 +767,283 @@ class ASTPrinter:
         self.print_ast(node.body)
         self._dedent()
         self._dedent()
-    
+
     def print_Block(self, node):
         self._write("Block:")
         self._indent()
         for statement in node.statements:
             self.print_ast(statement)
         self._dedent()
-    
-    def _write(self, text):
-        self.file.write("  " * self.indent_level + text + "\n")
-    
-    def _indent(self):
-        self.indent_level += 1
-    
-    def _dedent(self):
-        self.indent_level -= 1
 
+
+# Program Executor class
+class ProgramExecutor:
+    def __init__(self, optimized_code):
+        self.code = optimized_code
+        self.variables = {}
+        self.output = []
+        self.pc = 0  # Program counter
+        self.labels = {}
+        
+        # First pass to collect labels
+        for i, line in enumerate(self.code):
+            if line.startswith("LABEL "):
+                label = line.split()[1]
+                self.labels[label] = i
+
+    def execute(self):
+        while self.pc < len(self.code):
+            line = self.code[self.pc]
+            self.pc += 1
+            
+            if line.startswith("#") or line.startswith("LABEL"):
+                continue
+            elif line.startswith("STORE"):
+                parts = line.split()
+                var = parts[1][:-1]  # Remove comma
+                value = parts[2]
+                
+                if value.startswith("#"):
+                    self.variables[var] = int(value[1:])
+                elif value.startswith("t"):
+                    # Should have been optimized away
+                    self.variables[var] = 0
+            elif line.startswith("LOAD"):
+                parts = line.split()
+                temp = parts[1][:-1]  # Remove comma
+                src = parts[2]
+                
+                if src.startswith("#"):
+                    self.variables[temp] = int(src[1:])
+                else:
+                    self.variables[temp] = self.variables.get(src, 0)
+            elif line.startswith("PRINT"):
+                src = line.split()[1]
+                if src.startswith("#"):
+                    self.output.append(src[1:])
+                elif src.startswith("t"):
+                    self.output.append(str(self.variables.get(src, 0)))
+                else:
+                    self.output.append(str(self.variables.get(src, 0)))
+            elif line.startswith("IF_FALSE"):
+                parts = line.split()
+                cond = parts[1]
+                label = parts[3]
+                
+                condition = self.variables.get(cond, 0)
+                if not condition:
+                    self.pc = self.labels[label]
+            elif line.startswith("GOTO"):
+                label = line.split()[1]
+                self.pc = self.labels[label]
+            elif line.startswith("ADD"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = val1 + val2
+            elif line.startswith("SUB"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = val1 - val2
+            elif line.startswith("MUL"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = val1 * val2
+            elif line.startswith("DIV"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = val1 // val2 if val2 != 0 else 0
+            elif line.startswith("EQ"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = 1 if val1 == val2 else 0
+            elif line.startswith("NEQ"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = 1 if val1 != val2 else 0
+            elif line.startswith("LT"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = 1 if val1 < val2 else 0
+            elif line.startswith("GT"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = 1 if val1 > val2 else 0
+            elif line.startswith("LE"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = 1 if val1 <= val2 else 0
+            elif line.startswith("GE"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src1 = parts[2][:-1]
+                src2 = parts[3]
+                
+                val1 = self.variables.get(src1, 0) if src1.startswith("t") else int(src1[1:]) if src1.startswith("#") else self.variables.get(src1, 0)
+                val2 = self.variables.get(src2, 0) if src2.startswith("t") else int(src2[1:]) if src2.startswith("#") else self.variables.get(src2, 0)
+                
+                self.variables[dest] = 1 if val1 >= val2 else 0
+            elif line.startswith("NEG"):
+                parts = line.split()
+                dest = parts[1][:-1]
+                src = parts[2]
+                
+                val = self.variables.get(src, 0) if src.startswith("t") else int(src[1:]) if src.startswith("#") else self.variables.get(src, 0)
+                self.variables[dest] = -val
+        
+        return "\n".join(self.output)
+
+# Updated Main Compiler Function
+def compile_source(source_code, filename="output"):
+    try:
+        # Phase 1: Lexical Analysis
+        lexer = Lexer(source_code)
+        tokens = lexer.tokenize()
+        with open(f"{filename}_1_lexical.txt", "w") as f:
+            f.write("TOKENS:\n")
+            for token in tokens:
+                f.write(f"{token}\n")
+
+        # Phase 2: Syntax Analysis
+        parser = Parser(tokens)
+        ast = parser.parse()
+        ast_printer = ASTPrinter()
+        ast_str = ast_printer.print_ast(ast)
+        with open(f"{filename}_2_syntax.txt", "w") as f:
+            f.write("ABSTRACT SYNTAX TREE:\n")
+            f.write(ast_str)
+
+        # Phase 3: Semantic Analysis
+        analyzer = SemanticAnalyzer()
+        errors = analyzer.analyze(ast)
+        with open(f"{filename}_3_semantic.txt", "w") as f:
+            f.write("SEMANTIC ANALYSIS:\n")
+            if errors:
+                f.write("Errors:\n")
+                for error in errors:
+                    f.write(f"- {error}\n")
+            else:
+                f.write("No semantic errors found\n")
+            f.write("\nSymbol Table:\n")
+            for var in analyzer.symbol_table:
+                f.write(f"- {var}\n")
+
+        # Phase 4: Intermediate Code Generation
+        intermediate_gen = IntermediateCodeGenerator()
+        intermediate_code = intermediate_gen.generate(ast)
+        with open(f"{filename}_4_intermediate.txt", "w") as f:
+            f.write("INTERMEDIATE CODE:\n")
+            for line in intermediate_code:
+                f.write(f"{line}\n")
+
+        # Phase 5: Optimization
+        optimizer = Optimizer()
+        optimized_code = optimizer.optimize(intermediate_code)
+        with open(f"{filename}_5_optimized.txt", "w") as f:
+            f.write("OPTIMIZED CODE:\n")
+            for line in optimized_code:
+                f.write(f"{line}\n")
+
+        # Phase 6: Target Code Generation
+        target_gen = TargetCodeGenerator()
+        target_code = target_gen.generate(optimized_code)
+        with open(f"{filename}_6_target.txt", "w") as f:
+            f.write("TARGET CODE:\n")
+            for line in target_code:
+                f.write(f"{line}\n")
+
+        # Phase 7: Program Execution and Output
+        executor = ProgramExecutor(optimized_code)
+        program_output = executor.execute()
+        with open(f"{filename}_7_output.txt", "w") as f:
+            f.write("PROGRAM OUTPUT:\n")
+            f.write(program_output)
+
+        print(f"Compilation completed successfully. Output files:")
+        for i in range(1, 8):
+            phase_names = ['lexical', 'syntax', 'semantic', 'intermediate', 
+                         'optimized', 'target', 'output']
+            print(f"- {filename}_{i}_{phase_names[i-1]}.txt")
+        
+        print("\nProgram Output:")
+        print(program_output)
+
+    except Exception as e:
+        print(f"Compilation failed: {e}")
 
 def main():
     if len(sys.argv) > 1:
-        # Run the file provided as argument
-        filename = sys.argv[1]
-        with open(filename, 'r') as file:
-            source = file.read()
-            compile_and_run(source, filename)
+        # Compile from file
+        with open(sys.argv[1], 'r') as f:
+            source_code = f.read()
+        base_name = sys.argv[1].split('.')[0]
+        compile_source(source_code, base_name)
     else:
         # Interactive mode
-        print("TinyLang Interpreter (Press Ctrl+D to exit)")
-        print("Type your program and press Enter twice to execute:")
-        
-        while True:
-            try:
-                lines = []
-                print(">> ", end="")
-                while True:
-                    line = input()
-                    if not line.strip():
-                        break
-                    lines.append(line)
-                
-                source = "\n".join(lines)
-                if source.strip():
-                    compile_and_run(source, 'interactive')
-            except EOFError:
-                break
-            except KeyboardInterrupt:
-                print("\nExiting...")
-                break
-
+        print("TinyLang Compiler (Interactive Mode)")
+        print("Enter your program and press Ctrl+D (Unix) or Ctrl+Z (Windows) to compile")
+        print("-----------------------------------")
+        source_lines = []
+        try:
+            while True:
+                line = input()
+                source_lines.append(line)
+        except EOFError:
+            source_code = '\n'.join(source_lines)
+            compile_source(source_code, "interactive")
 
 if __name__ == "__main__":
     main()
